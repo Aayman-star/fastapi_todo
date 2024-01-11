@@ -28,23 +28,21 @@ def create_todo(todo: Todo):
     todos.append(todo)
     return {"message": "Todo created successfully"}
 
-@app.post("/todos/{todo_id}")
-def update_todo_description(todo_id: int, description:str,is_complete:bool):
+@app.put("/todos/{todo_id}/description")
+def update_todo_description(todo_id: int, description:str):
     """Update Todo Description"""
     for todo in todos:
         if todo.id == todo_id:
             todo.description = description
-            todo.is_complete = is_complete
             return {"message": "Todo successfully updated"}
-            
     return {"message": "Todo not updated"} 
 
-@app.post("/todos/{todo_id}")
-def update_todo_status(todo_id: int,is_complete:bool):
+@app.put("/todos/{todo_id}/is_complete")
+def update_todo_status(todo_id: int):
     """Update Todo Status"""
     for todo in todos:
         if todo.id == todo_id:
-            todo.is_complete = is_complete
+            todo.is_complete = not todo.is_complete
             return {"message": "Todo successfully updated"}
             
     return {"message": "Todo not updated"}
