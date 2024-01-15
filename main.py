@@ -1,95 +1,119 @@
-from fastapi import FastAPI,Body,Query,Path
-from models import Todo
+from fastapi import FastAPI,HTTPException,Body,Query,Path,Depends
+from sqlalchemy.orm import Session
+from todo_model import Todo
+from database import SessionLocal,engine,Todo as Td
 from enum import Enum
 
-class Status(Enum):
-    complete = "complete"
-    incomplete = "incomplete"
+# class Status(Enum):
+#     complete = "complete"
+#     incomplete = "incomplete"
 
 app :FastAPI = FastAPI();
+
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 """#??As long as the api is not connected with the database"""
 todos : list[Todo] = []
 
 @app.get("/")
-def get_todos():
+async def read_todos(db: Session = Depends(get_db)):
     """Get all Todos"""
-    if len(todos):
-        return {"Todos": todos}
-    return {"message": "No todos found"}
+    todos_query = db.query(Td).order_by(Td.id)
+    if todos_query.first() is None:
+        raise HTTPException(status_code=404, detail="No todos found")
+    return todos_query.all()
+   
 
-@app.get("/todos/{todo_id}")
-def get_todo(todo_id: int):
+@app.get("/todo/{todo_id}")
+def get_todo(todo_id: int,db:Session=Depends(get_db)):
     """Get a single Todo by id"""
-    for todo in todos:
-        if todo.id == todo_id:
-            return {"Todo": todo}
-    return {"message": "Todo not found"}
+    todo = db.query(Td).filter(Td.id==todo_id).first()
+    return todo
 
-@app.get("/todos/status_complete/{status}")
-def get_completed_todos(status:Status=Path(...,description="The status of todos to filter by")):
+
+@app.get("/complete-todos")
+def get_completed_todos(db:Session=Depends(get_db)):
     """Get all completed Todos"""
-    completed_todos: list[Todo] = []
-    for todo in todos:
-        if status ==Status.complete and todo.is_complete:
-            completed_todos.append(todo)
-    if len(completed_todos):
-        return {"Todos": completed_todos}
-    return {"message": "No completed todos found"}	
+    todos_query = db.query(Td).order_by(Td.id)
+    done_todos_query = todos_query.filter(Td.is_complete==True)
+    if done_todos_query.first() is None:
+        raise HTTPException(status_code=404, detail="No completed todos found")
+    return done_todos_query.all()
+ 	
 
-@app.get("/todos/status_incomplete/{status}")
-def get_incomplete_todos(status:Status=Path(...,description="The status of todos to filter by")):
+@app.get("/incomplete-todos")
+def get_incomplete_todos(db:Session=Depends(get_db)):
     """Get all incomplete Todos"""
-    incomplete_todos:list[Todo] = []
-    for todo in todos:
-        if status == Status.incomplete and not todo.is_complete:
-            incomplete_todos.append(todo)
-    if len(incomplete_todos):
-        return {"Todos": incomplete_todos}
-    return {"message": "No incomplete todos found"}
+    todos_query = db.query(Td).order_by(Td.id)
+    undone_todos_query = todos_query.filter(Td.is_complete==False)
+    if undone_todos_query.first() is None:
+        raise HTTPException(status_code=404, detail="No incomplete todos found")
+    return undone_todos_query.all()
+ 
 
-@app.post("/todos")
-def create_todo(todo: Todo=Body(embed=True)):
+@app.post("/create-todo")
+async def create_todo(todo: Todo=Body(embed=True),db: Session = Depends(get_db)):
     """Create a Todo"""
-    todos.append(todo)
-    return {"message": "Todo created successfully"}
+    todo = Td(description=todo.description,is_complete=todo.is_complete)
+    db.add(todo)
+    db.commit()
+    db.refresh(todo)
+    return todo
 
-@app.put("/todos/update")
-def update_todo_description(todo_id: int, description:str):
+
+@app.put("/update-text")
+def update_todo_description(todo_id: int, text:str,db:Session=Depends(get_db)):
     """Update Todo Description"""
-    for todo in todos:
-        if todo.id == todo_id:
-            todo.description = description
-            return {"message": "Todo successfully updated"}
-    return {"message": "Todo not updated"} 
+    todo = db.query(Td).filter(Td.id==todo_id).first()
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    todo.description = text
+    db.commit()
+    db.refresh(todo)
+    return todo
+ 
 
-@app.put("/todos/check")
-def update_todo_status(todo_id: int):
+@app.put("/update-status")
+def update_todo_status(todo_id: int,db:Session=Depends(get_db)):
     """Update Todo Status"""
-    for todo in todos:
-        if todo.id == todo_id:
-            todo.is_complete = not todo.is_complete
-            return {"message": "Todo successfully updated"}
-            
-    return {"message": "Todo not updated"}
+    todo = db.query(Td).filter(Td.id==todo_id).first()
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    todo.is_complete = not todo.is_complete
+    db.commit()
+    db.refresh(todo)
+    return todo
 
 
 
-@app.delete("/todos/{todo_id}")
-def delete_todo(todo_id: int):
+
+@app.delete("/delete/{todo_id}")
+async def delete_todo(todo_id: int,db: Session = Depends(get_db)):
     """Delete a Todo"""
-    for todo in todos:
-        if todo.id == todo_id:
-            todos.remove(todo)
+    db_todo = db.query(Td).filter(Td.id==todo_id).first() # Todo object
+    if db_todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    db.delete(db_todo)
+    db.commit()
+    return {"todo deleted": db_todo.description}
+  
             
-    return {"message": "ToDo deleted"}
-
-@app.delete("/todos")
-def delete_all_todos():
-    """Delete all Todos"""
-    todos.clear()
     
-    return {"message": "All Todos deleted"}
+
+# @app.delete("/delete-all")
+# def delete_all_todos(db:Session=Depends(get_db)):
+#     """Delete all Todos"""
+#     todos = db.query(Td)
+#     db.delete(todos.all())
+#     db.commit()
+    
+#     return {"message": "All Todos deleted"}
 
 
 if __name__ == "__main__": 
