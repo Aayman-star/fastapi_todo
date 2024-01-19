@@ -22,4 +22,13 @@ class Todo(Base):
     description = Column(String, index=True)
     is_complete = Column(Boolean, default=False) 
 
+class UserList(Base):  
+    __tablename__ = "users"  
+
+    id=Column(Integer,primary_key=True,index=True)
+    username=Column(String,unique=True)  
+    useremail=Column(String,unique=True)
+    hashed_password=Column(String)
+
+
 Base.metadata.create_all(engine)

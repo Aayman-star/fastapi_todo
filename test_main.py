@@ -1,24 +1,44 @@
 from fastapi import Depends
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy.orm import Session
 
 from typing import List
 from main import app,get_db
-from .todo_model import Todo
-from .database import SessionLocal,engine,Todo as Td
+from models import Todo
+from database import SessionLocal,engine,Todo as Td
 
 
 client = TestClient(app)
 
-
+@pytest.fixture(scope="module")
+def db():
+    # create a test database
+    Td.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    yield db
+    # drop the test database
+    Td.metadata.drop_all(bind=engine)
 
 """This file contains tests for all api routes"""
 
 
-def test_read_todos():
+def test_read_todos(db):
+    db.add(Td(description="Buy groceries", is_complete=False))
+    db.add(Td(description="Do laundry", is_complete=True))
+    db.commit()
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == List[Td]
+    assert response.json() == [
+        {"id": 1, "description": "Buy groceries", "is_complete": False},
+        {"id": 2, "description": "Do laundry", "is_complete": True}
+    ]
+    # delete the test data
+    db.query(Td)
+    db.commit()
+    # response = client.get("/")
+    # assert response.status_code == 200
+    # assert response.json() == List[Td]
 
 
 # def test_get_todo():

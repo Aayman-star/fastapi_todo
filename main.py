@@ -1,14 +1,23 @@
+from typing import Annotated
 from fastapi import FastAPI,HTTPException,Body,Query,Path,Depends
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from todo_model import Todo
+from models import Todo
 from database import SessionLocal,engine,Todo as Td
 from enum import Enum
+import auth
+from auth import get_current_user
+from starlette import status
 
 # class Status(Enum):
 #     complete = "complete"
 #     incomplete = "incomplete"
 
 app :FastAPI = FastAPI();
+#Inclding the router from the auth file
+app.include_router(auth.router)
+
+#oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Dependency
 def get_db():
@@ -21,6 +30,14 @@ def get_db():
 """#??As long as the api is not connected with the database"""
 todos : list[Todo] = []
 
+user_dependency = Annotated[dict, Depends(get_current_user)]
+
+@app.get("/user",status_code = status.HTTP_200_OK)
+async def get_user(user:user_dependency,db:Session = Depends(get_db)):
+    """This is to get the current user"""
+    if user is None:
+        raise HTTPException(status_code=404, detail="No user found")
+    return {"User":user}
 @app.get("/")
 async def read_todos(db: Session = Depends(get_db)):
     """Get all Todos"""
@@ -109,6 +126,7 @@ async def delete_todo(todo_id: int,db: Session = Depends(get_db)):
 # @app.delete("/delete-all")
 # def delete_all_todos(db:Session=Depends(get_db)):
 #     """Delete all Todos"""
+      #db.query(Td).delete()
 #     todos = db.query(Td)
 #     db.delete(todos.all())
 #     db.commit()
